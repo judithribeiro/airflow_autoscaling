@@ -1,0 +1,206 @@
+Description: Creates Airflow Webserver Service
+
+Resources:
+  WebserverExternalSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Airflow webserver. Allow all inbound traffic.
+      GroupName: "airflow-production-webserver-security-group"
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          FromPort: 0
+          IpProtocol: -1
+          ToPort: 0
+      SecurityGroupIngress:
+
+        - CidrIp: "0.0.0.0/0"
+          FromPort: "80"
+          IpProtocol: tcp
+          ToPort: "80"
+
+      VpcId: !ImportValue network-VpcId
+      Tags:
+        - Key: Name
+          Value: "airflow-production-webserver-security-group"
+
+  WebserverInternalSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Airflow webserver.
+      GroupName: "airflow-production-webserver-internal-security-group"
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          FromPort: 0
+          IpProtocol: -1
+          ToPort: 0
+      SecurityGroupIngress:
+        - SourceSecurityGroupId: !GetAtt WebserverExternalSecurityGroup.GroupId
+          FromPort: "8080"
+          IpProtocol: tcp
+          ToPort: "8080"
+      VpcId: !ImportValue network-VpcId
+      Tags:
+        - Key: Name
+          Value: "airflow-production-webserver-internal-security-group"
+
+  WebserverTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Cpu: "1024"
+      Memory: "2048"
+      ExecutionRoleArn: !ImportValue iam-ECSTaskRoleArn
+      Family: "airflow-production-webserver-task-definition"
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ContainerDefinitions:
+        - Name: "airflow-production-webserver"
+          Image: !Sub
+            - "${AWS::AccountId}.dkr.ecr.us-east-2.amazonaws.com/${ecr_repository}:latest"
+            - ecr_repository: !ImportValue ecr-AirflowDockerRepositoryName
+          Essential: true
+          PortMappings:
+            - ContainerPort: "8080"
+              HostPort: "8080"
+          Command:
+            - webserver
+          Environment:
+            - Name: REDIS_HOST
+              Value: !ImportValue redis-CeleryBackendHost
+            - Name: REDIS_PORT
+              Value: !ImportValue redis-CeleryBackendPort
+            - Name: POSTGRES_HOST
+              Value: !ImportValue database-MetadataDBInstanceHost
+            - Name: POSTGRES_PORT
+              Value: !ImportValue database-MetadataDBInstancePort
+            - Name: POSTGRES_USER
+              Value:  !Join ['', ['{{resolve:secretsmanager:', !ImportValue secrets-MetadataDBSecretId, ':SecretString:username}}' ]]
+            - Name: POSTGRES_PASSWORD
+              Value:  !Join ['', ['{{resolve:secretsmanager:', !ImportValue secrets-MetadataDBSecretId, ':SecretString:password}}' ]]
+            - Name: POSTGRES_DB
+              Value: "airflow"
+            - Name: AIRFLOW_BASE_URL
+              Value: "http://localhost:8080"
+            - Name: ENABLE_REMOTE_LOGGING
+              Value: False
+            - Name: STAGE
+              Value: "production"
+            - Name: FERNET_KEY
+              Value:  !Join ['', ['{{resolve:secretsmanager:', !ImportValue secrets-AirflowFernetKeySecretId, ':SecretString:fernet_key}}' ]]
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !ImportValue cloudwatch-AirflowECSLogGroupName
+              awslogs-region: "us-east-2"
+              awslogs-stream-prefix: webserver
+      Tags:
+        - Key: Name
+          Value: "airflow-production-webserver-task-definition"
+
+  WebserverAlb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: "airflow-production-webserver-alb"
+      Type: application
+      SecurityGroups:
+        - !Ref WebserverExternalSecurityGroup
+      Subnets:
+        - !ImportValue network-PublicSubnet1Id
+        - !ImportValue network-PublicSubnet2Id
+        - !ImportValue network-PublicSubnet3Id
+      Tags:
+        - Key: Name
+          Value: "airflow-production-webserver-alb"
+
+  WebserverAlbTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: "airflow-production-ws-alb-tg"
+      Port: "8080"
+      Protocol: HTTP
+      VpcId: !ImportValue network-VpcId
+      TargetType: ip
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: /health
+      HealthCheckPort: "8080"
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 5
+      UnhealthyThresholdCount: 3
+      Tags:
+        - Key: Name
+          Value: "airflow-production-ws-alb-tg"
+
+  WebserverAlbListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref WebserverAlbTargetGroup
+          Type: forward
+      LoadBalancerArn: !Ref WebserverAlb
+      Port: "80"
+      Protocol: HTTP
+
+  WebserverEcsService:
+    Type: AWS::ECS::Service
+    DependsOn: WebserverAlbListener
+    Properties:
+      ServiceName: "airflow-production-webserver"
+      Cluster: !ImportValue ecs-AirflowECSClusteArn
+      TaskDefinition: !Ref WebserverTaskDefinition
+      LaunchType: FARGATE
+      DesiredCount: "1"
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref WebserverInternalSecurityGroup
+          Subnets:
+            - !ImportValue network-PublicSubnet1Id
+            - !ImportValue network-PublicSubnet2Id
+            - !ImportValue network-PublicSubnet3Id
+      LoadBalancers:
+        - ContainerName: "airflow-production-webserver"
+          ContainerPort: "8080"
+          TargetGroupArn: !Ref WebserverAlbTargetGroup
+
+  WebserverScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MaxCapacity: "3"
+      MinCapacity: "1"
+      RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService'
+      ServiceNamespace: ecs
+      ScalableDimension: 'ecs:service:DesiredCount'
+      ResourceId: !Join ["/", [service, !ImportValue ecs-AirflowECSClusterId, !GetAtt WebserverEcsService.Name]]
+
+  ServiceScalingPolicyCPU:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: "airflow-production-webserver-tracking-cpu"
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref WebserverScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: "60"
+        ScaleInCooldown: "180"
+        ScaleOutCooldown: "60"
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+
+  ServiceScalingPolicyMemory:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: "airflow-production-webserver-tracking-memory"
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref WebserverScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: "80"
+        ScaleInCooldown: "180"
+        ScaleOutCooldown: "60"
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageMemoryUtilization
+
+Outputs:
+  AirflowWebServerEndpoint:
+    Value: !GetAtt WebserverAlb.DNSName
