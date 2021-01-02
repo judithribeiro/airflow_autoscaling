@@ -2,9 +2,13 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="bb0991fb-4f45-4a57-8bb0-fd45d6c0f337" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/aws.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/aws.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dags/netimovel/netimovel.py" beforeDir="false" afterPath="$PROJECT_DIR$/dags/netimovel/netimovel.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dags/scraping_api_netimovel_dag.py" beforeDir="false" afterPath="$PROJECT_DIR$/dags/scraping_api_netimovel_dag.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dags/scraping_api_zapimovel_dag.py" beforeDir="false" afterPath="$PROJECT_DIR$/dags/scraping_api_zapimovel_dag.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -63,7 +67,9 @@
       <workItem from="1602622739549" duration="2067000" />
       <workItem from="1602679022674" duration="7554000" />
       <workItem from="1602870670832" duration="4527000" />
-      <workItem from="1609425567114" duration="223000" />
+      <workItem from="1609425567114" duration="2404000" />
+      <workItem from="1609429025503" duration="7519000" />
+      <workItem from="1609584399254" duration="707000" />
     </task>
     <servers />
   </component>
@@ -75,7 +81,9 @@
       <map>
         <entry key="MAIN">
           <value>
-            <State />
+            <State>
+              <option name="COLUMN_ORDER" />
+            </State>
           </value>
         </entry>
       </map>

@@ -36,6 +36,7 @@ client = boto3.client('firehose', aws_access_key_id=AWS_ACCESS_KEY_ID, aws_secre
 dag = DAG('scraping_api_zapimovel_dag',
           description='scraping api site zapimoveis',
           schedule_interval=None,
+          # schedule_interval='0 0 1 * *',
           catchup=False,
           default_args=default_args)
 
@@ -126,8 +127,8 @@ def task_1(**kwargs):
     response = requests.request("GET", url, headers=headers, data=payload)
     json_data = json.loads(response.text)
     total = json_data['search']['totalCount']
-    paginas = 10
-    # paginas = math.ceil(total / 21)
+    # paginas = 10
+    paginas = math.ceil(total / 21)
     x = range(paginas)
     logger.info("total de paginas: {}".format(x))    
     for n in x:        

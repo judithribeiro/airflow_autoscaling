@@ -19,10 +19,12 @@ All infrastructure is created with Cloudformation and Secrets are managed by AWS
 * Create a virtual environment
 * Setup env variables in your .zshrc or .bashrc, or in your the terminal session that you are going to use:
 ```shell script
-	export AWS_REGION=us-east-1;
-	export AWS_PROFILE=my_aws_profile;
-	export ENVIRONMENT=dev;
+	export AWS_REGION=us-east-2;
+	export AWS_PROFILE=devops;
+	export ENVIRONMENT=production;
 ```
+
+
 
 ## Deploy Airflow Locally
 ```shell script
